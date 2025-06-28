@@ -10,6 +10,13 @@ class CodeRequest(BaseModel):
 
 @app.post("/verify")
 async def verify_code(payload: CodeRequest):
+    # ✅ Log the request
+    print("✅ Received request to /verify")
+    print("📦 Code:")
+    print(payload.code)
+    print("🔍 Test Includes:")
+    print(payload.testIncludes)
+
     try:
         result = subprocess.run(
             ['python3', '-c', payload.code],
