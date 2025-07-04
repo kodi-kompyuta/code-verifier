@@ -1,38 +1,48 @@
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import subprocess
+import io
+import sys
+from contextlib import redirect_stdout
 
 app = FastAPI()
 
-# ✅ Add this root route
-@app.get("/")
-def read_root():
-    return {"message": "Hello from FastAPI 🎉"}
+# ✅ Allow CORS so your React Native app can call it
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # You can replace "*" with your domain later
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# ✅ Your code model
+# ✅ Model to parse the incoming request
 class CodeRequest(BaseModel):
     code: str
-    expectedOutput: str = None
-    testIncludes: str = None
 
 @app.post("/verify")
-async def verify_code(payload: CodeRequest):
+async def verify_code(request: CodeRequest):
+    code = request.code
+
+    # ✅ Define a minimal, safe execution environment
+    safe_globals = {
+        "__builtins__": {
+            "print": print,
+            "range": range,
+            "len": len,
+            "str": str,
+            "int": int,
+            "float": float,
+            "bool": bool,
+            # Add more safe functions as needed
+        }
+    }
+
     try:
-        result = subprocess.run(
-            ['python3', '-c', payload.code],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        output = result.stdout.strip()
-
-        if payload.expectedOutput:
-            is_match = payload.expectedOutput in output
-        elif payload.testIncludes:
-            is_match = payload.testIncludes in output
-        else:
-            is_match = False
-
-        return {"success": is_match, "output": output}
+        f = io.StringIO()
+        with redirect_stdout(f):
+            exec(code, safe_globals, {})
+        output = f.getvalue()
+        return {"output": output}
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"output": f"❌ Error: {str(e)}"}
